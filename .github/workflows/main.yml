@@ -1,0 +1,60 @@
+name: Build dsh-ios Unsigned IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Install build dependencies
+        run: |
+          brew install meson ninja llvm libarchive
+          pip3 install meson
+
+      - name: Generate Xcode project
+        run: make project
+
+      - name: Build guest rootfs (make rootfs)
+        run: make rootfs
+        continue-on-error: true
+
+      - name: Archive app (unsigned)
+        run: |
+          xcodebuild \
+            -project DSH.xcodeproj \
+            -scheme DSH \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$RUNNER_TEMP/DSH.xcarchive" \
+            archive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$RUNNER_TEMP/DSH.xcarchive/Products/Applications/DSH.app" "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP"
+          zip -qry dsh-ios-unsigned.ipa Payload
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-ios-unsigned-ipa
+          path: ${{ runner.temp }}/dsh-ios-unsigned.ipa
+          if-no-files-found: error
