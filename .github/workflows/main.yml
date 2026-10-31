@@ -23,7 +23,6 @@ jobs:
       - name: Install build dependencies
         run: |
           brew install meson ninja llvm libarchive
-          pip3 install meson
 
       - name: Generate Xcode project
         run: make project
